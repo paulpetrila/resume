@@ -49,7 +49,7 @@ const portfolioSectionData = {
     {
       name: 'Mentor @ Health Innovation Zone',
       image: import('@/assets/logos/hizbydiz.png'),
-      dates: [new Date('2020-03'), null],
+      dates: [new Date('2023-03'), null],
       details: [
         { label: 'Team size', value: '1 person' },
         { label: 'My role', value: ['Front-end Developer', 'Designer'] },

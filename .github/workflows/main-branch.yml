@@ -1,54 +1,78 @@
-name: Build & deploy
+name: Main Branch
 
 on:
   push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
-  build:
-    name: Build
+  prettier:
+    name: Run Prettier check
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Installing Node.js
-        uses: actions/setup-node@v1
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
-          node-version: 18.x
-
-      - name: Installing NPM packages
+          node-version: 18
+          cache: npm
+      - name: Install dependencies
         run: npm ci
+      - name: Run Prettier
+        run: npm run prettier:check
 
-      - name: Building project
-        run: npm run build
-
-      - name: Uploading production-ready build files
-        uses: actions/upload-artifact@v2
+  typescript:
+    name: Run TypeScript check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
-          name: production-files
-          path: ./dist
+          node-version: 18
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run TypeScript types check
+        run: npm run ts:check
+
+  astro:
+    name: Run Astro check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Astro check
+        run: npm run astro:check
 
   deploy:
-    name: Deploy
-    needs: build
+    name: Deploy to Netlify
+    needs: [prettier, typescript, astro]
+    if: github.repository == 'KonradSzwarc/devscard'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
+    outputs:
+      deploy-url: ${{ steps.netlify.outputs.deploy-url }}
     steps:
-      - name: Downloading artifact
-        uses: actions/download-artifact@v2
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
         with:
-          name: production-files
-          path: ./dist
-
-      - name: Deploying to gh-pages
-        uses: peaceiris/actions-gh-pages@v3
+          node-version: 18
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Astro build command
+        run: npm run build
+      - name: Deploy to Netlify
+        id: netlify
+        uses: nwtgck/actions-netlify@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+          publish-dir: dist
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          production-deploy: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        timeout-minutes: 1
