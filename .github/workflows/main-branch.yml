@@ -1,136 +1,57 @@
-name: Main Branch
+name: Build & deploy
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  prettier:
-    name: Run Prettier check
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Run Prettier
-        run: npm run prettier:check
 
-  typescript:
-    name: Run TypeScript check
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Run TypeScript types check
-        run: npm run ts:check
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-  astro:
-    name: Run Astro check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Installing Node.js
+        uses: actions/setup-node@v1
         with:
-          node-version: 18
-          cache: npm
-      - name: Install dependencies
+          node-version: 16.x
+
+      - name: Installing NPM packages
         run: npm ci
-      - name: Run Astro check
-        run: npm run astro:check
+
+      - name: Building project
+        run: npm run build
+
+      - name: Running tests
+        run: npm run test
+
+      - name: Uploading production-ready build files
+        uses: actions/upload-artifact@v2
+        with:
+          name: production-files
+          path: ./build
 
   deploy:
-    name: Deploy to Netlify
-    needs: [prettier, typescript, astro]
-    if: github.repository == 'KonradSzwarc/devscard'
+    name: Deploy
+    needs: build
     runs-on: ubuntu-latest
-    outputs:
-      deploy-url: ${{ steps.netlify.outputs.deploy-url }}
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 18
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Run Astro build command
-        run: npm run build
-      - name: Deploy to Netlify
-        id: netlify
-        uses: nwtgck/actions-netlify@v2
-        with:
-          publish-dir: dist
-          production-branch: main
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          production-deploy: true
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        timeout-minutes: 1
+    if: github.ref == 'refs/heads/main'
 
-  percy:
-    name: Run Percy check
-    if: github.repository == 'KonradSzwarc/devscard'
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Downloading artifact
+        uses: actions/download-artifact@v2
         with:
-          node-version: 18
-          cache: npm
-      - name: Install dependencies
-        run: npm ci
-      - name: Run Astro build command
-        run: npm run build
-        env:
-          PUBLIC_APP_ENV: snapshot
-      - name: Percy check
-        env:
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
-        run: npx percy snapshot dist/
+          name: production-files
+          path: ./build
 
-  lighthouse:
-    name: Run Lighthouse check
-    if: github.repository == 'KonradSzwarc/devscard'
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Lighthouse check
-        uses: foo-software/lighthouse-check-action@master
+      - name: Deploying to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          urls: ${{ needs.deploy.outputs.deploy-url }}
-          device: all
-
-  release:
-    name: Create release
-    if: github.repository == 'KonradSzwarc/devscard'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
-      - name: Get project information
-        id: projectinfo
-        uses: gregoranders/nodejs-project-info@v0.0.20
-      - name: Get changelog entries
-        id: changelog_reader
-        uses: mindsers/changelog-reader-action@v2
-        with:
-          version: ${{ steps.projectinfo.outputs.version }}
-      - name: Create a new tag and release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ steps.changelog_reader.outputs.version }}
-          name: Release ${{ steps.changelog_reader.outputs.version }}
-          body: ${{ steps.changelog_reader.outputs.changes }}
-          allowUpdates: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build
